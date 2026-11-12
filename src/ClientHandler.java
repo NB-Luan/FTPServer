@@ -2,6 +2,7 @@ import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -17,6 +18,7 @@ public class ClientHandler implements Runnable {
     private BufferedWriter writer;
     private boolean isLoggedIn = false;
     private String currentUsername = null;
+    private String currentDir = "/";
     private ServerSocket dataServerSocket = null;
     private String renameFromStr = null;
 
@@ -107,28 +109,58 @@ public class ClientHandler implements Runnable {
             return false;
         }
 
-        // 2. Thao tác tệp tin
+        // 2. Thao tác tệp tin & Thư mục
         switch (cmd) {
             case "PWD":
-                sendRaw("257 \"/\" is current directory.\r\n");
+                sendRaw("257 \"" + currentDir + "\" is current directory.\r\n");
                 break;
 
             case "CWD":
+                String target = arg.trim();
+                if (target.isEmpty() || target.equals(".")) {
+                    sendRaw("250 Directory unchanged.\r\n");
+                } else if (target.equals("..")) {
+                    handleCdup();
+                } else {
+                    String newPath = resolvePath(currentDir, target);
+                    if (Database.directoryExists(newPath)) {
+                        currentDir = newPath;
+                        sendRaw("250 Directory changed to \"" + currentDir + "\".\r\n");
+                    } else {
+                        sendRaw("550 Directory not found.\r\n");
+                    }
+                }
+                break;
+
             case "CDUP":
-                sendRaw("250 Directory changed.\r\n");
+                handleCdup();
                 break;
 
             case "MKD":
-                sendRaw("257 \"/" + cleanFileName(arg) + "\" created.\r\n");
+                String newDirName = cleanFileName(arg);
+                if (Database.createDirectory(currentDir, newDirName, currentUsername)) {
+                    serverUI.log("[" + clientAddress + "] (" + currentUsername + ") Tạo thư mục: " + newDirName);
+                    Database.logActivity(clientAddress, currentUsername, "MKDIR", newDirName);
+                    sendRaw("257 \"/" + newDirName + "\" created.\r\n");
+                } else {
+                    sendRaw("550 Failed to create directory.\r\n");
+                }
                 break;
 
             case "RMD":
-                sendRaw("250 Directory removed.\r\n");
+                String rmDirName = cleanFileName(arg);
+                if (Database.deleteDirectory(currentDir, rmDirName)) {
+                    serverUI.log("[" + clientAddress + "] (" + currentUsername + ") Xóa thư mục: " + rmDirName);
+                    Database.logActivity(clientAddress, currentUsername, "RMDIR", rmDirName);
+                    sendRaw("250 Directory removed.\r\n");
+                } else {
+                    sendRaw("550 Failed to remove directory.\r\n");
+                }
                 break;
 
             case "DELE":
                 String fileToDelete = cleanFileName(arg);
-                if (Database.deleteFile(fileToDelete)) {
+                if (Database.deleteFile(currentDir, fileToDelete)) {
                     serverUI.log("[" + clientAddress + "] (" + currentUsername + ") Xóa: " + fileToDelete);
                     Database.logActivity(clientAddress, currentUsername, "DELETE", fileToDelete);
                     sendRaw("250 File deleted.\r\n");
@@ -139,7 +171,7 @@ public class ClientHandler implements Runnable {
 
             case "RNFR":
                 String srcFile = cleanFileName(arg);
-                if (Database.getFileSize(srcFile) >= 0) {
+                if (Database.getFileSize(currentDir, srcFile) >= 0 || Database.directoryExists(resolvePath(currentDir, srcFile))) {
                     renameFromStr = srcFile;
                     sendRaw("350 Ready for destination name.\r\n");
                 } else {
@@ -153,7 +185,7 @@ public class ClientHandler implements Runnable {
                 if (renameFromStr == null) {
                     sendRaw("503 Bad sequence.\r\n");
                 } else {
-                    if (Database.renameFile(renameFromStr, dstFile)) {
+                    if (Database.renameFile(currentDir, renameFromStr, dstFile)) {
                         serverUI.log("[" + clientAddress + "] (" + currentUsername + ") Đổi tên: " + renameFromStr + " -> " + dstFile);
                         Database.logActivity(clientAddress, currentUsername, "RENAME", renameFromStr + " -> " + dstFile);
                         sendRaw("250 Rename successful.\r\n");
@@ -181,7 +213,7 @@ public class ClientHandler implements Runnable {
                 break;
 
             case "SIZE":
-                long sz = Database.getFileSize(cleanFileName(arg));
+                long sz = Database.getFileSize(currentDir, cleanFileName(arg));
                 if (sz >= 0) sendRaw("213 " + sz + "\r\n");
                 else sendRaw("550 File not found.\r\n");
                 break;
@@ -210,6 +242,36 @@ public class ClientHandler implements Runnable {
         return false;
     }
 
+    private void handleCdup() {
+        if (currentDir.equals("/")) {
+            sendRaw("250 Directory unchanged (at root).\r\n");
+            return;
+        }
+        int lastSlash = currentDir.lastIndexOf('/');
+        currentDir = lastSlash <= 0 ? "/" : currentDir.substring(0, lastSlash);
+        sendRaw("250 Directory changed to \"" + currentDir + "\".\r\n");
+    }
+
+    private String resolvePath(String current, String target) {
+        if (target == null || target.trim().isEmpty() || target.equals(".")) return current;
+        target = target.trim().replace('\\', '/');
+        if (target.equals("/")) return "/";
+
+        String fullPath = target.startsWith("/") ? target : (current.equals("/") ? "/" + target : current + "/" + target);
+        String[] parts = fullPath.split("/");
+        List<String> stack = new ArrayList<>();
+        for (String p : parts) {
+            if (p.isEmpty() || p.equals(".")) continue;
+            if (p.equals("..")) {
+                if (!stack.isEmpty()) stack.remove(stack.size() - 1);
+            } else {
+                stack.add(p);
+            }
+        }
+        if (stack.isEmpty()) return "/";
+        return "/" + String.join("/", stack);
+    }
+
     private void handlePasv() {
         closeDataServer();
         try {
@@ -236,11 +298,14 @@ public class ClientHandler implements Runnable {
         try (Socket dataSocket = dataServerSocket.accept();
              BufferedWriter dw = new BufferedWriter(new OutputStreamWriter(dataSocket.getOutputStream(), StandardCharsets.UTF_8))) {
 
-            List<Database.FileItem> files = Database.listFiles();
+            List<Database.FileItem> files = Database.listFiles(currentDir);
             SimpleDateFormat sdf = new SimpleDateFormat("MMM dd HH:mm", Locale.ENGLISH);
             for (Database.FileItem f : files) {
-                String line = String.format(Locale.ENGLISH, "-rw-r--r-- 1 ftp ftp %10d %s %s\r\n",
-                        f.size,
+                String perms = f.isDir ? "drwxr-xr-x" : "-rw-r--r--";
+                long size = f.isDir ? 4096 : f.size;
+                String line = String.format(Locale.ENGLISH, "%s 1 ftp ftp %10d %s %s\r\n",
+                        perms,
+                        size,
                         sdf.format(f.uploadedAt != null ? f.uploadedAt : new Date()),
                         f.name);
                 dw.write(line);
@@ -261,7 +326,7 @@ public class ClientHandler implements Runnable {
         }
 
         String fileName = cleanFileName(arg);
-        byte[] fileData = Database.getFileData(fileName);
+        byte[] fileData = Database.getFileData(currentDir, fileName);
         if (fileData == null) {
             sendRaw("550 File not found.\r\n");
             closeDataServer();
@@ -309,7 +374,7 @@ public class ClientHandler implements Runnable {
             }
 
             byte[] data = baos.toByteArray();
-            if (Database.saveFile(fileName, data, currentUsername)) {
+            if (Database.saveFile(currentDir, fileName, data, currentUsername)) {
                 sendRaw("226 Transfer complete.\r\n");
                 serverUI.log("[" + clientAddress + "] (" + currentUsername + ") Upload: " + fileName + " (" + formatSize(data.length) + ")");
                 Database.logActivity(clientAddress, currentUsername, "UPLOAD", fileName + " (" + data.length + " bytes)");
