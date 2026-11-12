@@ -76,9 +76,11 @@ public class ClientHandler implements Runnable {
             logCommand("Nhập mật khẩu: ******");
             if (currentUsername != null && FtpServer.checkLogin(currentUsername, arg)) {
                 isLoggedIn = true;
+                Database.logActivity(clientAddress, currentUsername, "LOGIN", "Đăng nhập thành công với quyền " + currentUsername);
                 sendResponse("230 User logged in, proceed.\r\n", "230 Đăng nhập thành công với quyền '" + currentUsername + "'");
             } else {
                 isLoggedIn = false;
+                Database.logActivity(clientAddress, currentUsername, "LOGIN_FAILED", "Đăng nhập thất bại: sai user hoặc pass");
                 sendResponse("530 Not logged in, user or password incorrect.\r\n", "530 Đăng nhập thất bại: Sai tài khoản hoặc mật khẩu");
             }
             return false;
@@ -89,8 +91,10 @@ public class ClientHandler implements Runnable {
                 String regPass = parts[1].trim();
                 logCommand("Yêu cầu đăng ký tài khoản mới: " + regUser);
                 if (FtpServer.registerUser(regUser, regPass)) {
+                    Database.logActivity(clientAddress, regUser, "REGISTER", "Đăng ký thành công tài khoản mới");
                     sendResponse("200 Registration successful.\r\n", "200 Đăng ký thành công tài khoản '" + regUser + "' vào MySQL");
                 } else {
+                    Database.logActivity(clientAddress, regUser, "REGISTER_FAILED", "Đăng ký thất bại: tên tài khoản đã tồn tại");
                     sendResponse("550 Registration failed: Username already exists.\r\n", "550 Đăng ký thất bại: Tài khoản '" + regUser + "' đã tồn tại");
                 }
             } else {
@@ -99,6 +103,7 @@ public class ClientHandler implements Runnable {
             return false;
         } else if (cmd.equals("QUIT")) {
             logCommand("Yêu cầu thoát: QUIT");
+            Database.logActivity(clientAddress, currentUsername, "QUIT", "Client ngắt kết nối");
             sendResponse("221 Goodbye.\r\n", "221 Tạm biệt và đóng kết nối");
             return true;
         }
@@ -142,6 +147,7 @@ public class ClientHandler implements Runnable {
                 logCommand("Tạo thư mục mới: " + arg);
                 File newDir = resolvePath(arg);
                 if (newDir != null && !newDir.exists() && newDir.mkdir()) {
+                    Database.logActivity(clientAddress, currentUsername, "MKDIR", "Đã tạo thư mục: " + getFtpPath(newDir));
                     sendResponse("257 \"" + getFtpPath(newDir) + "\" directory created.\r\n", "257 Đã tạo thư mục: " + getFtpPath(newDir));
                 } else {
                     sendResponse("550 Failed to create directory.\r\n", "550 Tạo thư mục thất bại");
@@ -153,6 +159,7 @@ public class ClientHandler implements Runnable {
                 File dirToRemove = resolvePath(arg);
                 if (dirToRemove != null && dirToRemove.exists() && dirToRemove.isDirectory()
                         && !dirToRemove.equals(rootDirectory) && dirToRemove.delete()) {
+                    Database.logActivity(clientAddress, currentUsername, "RMDIR", "Đã xóa thư mục: " + arg);
                     sendResponse("250 Directory removed.\r\n", "250 Đã xóa thư mục: " + arg);
                 } else {
                     sendResponse("550 Failed to remove directory.\r\n", "550 Xóa thư mục thất bại");
@@ -163,6 +170,8 @@ public class ClientHandler implements Runnable {
                 logCommand("Xóa tệp tin: " + arg);
                 File fileToDelete = resolvePath(arg);
                 if (fileToDelete != null && fileToDelete.exists() && fileToDelete.isFile() && fileToDelete.delete()) {
+                    Database.logFileDeleted(fileToDelete.getName());
+                    Database.logActivity(clientAddress, currentUsername, "DELETE", "Đã xóa tệp tin: " + arg);
                     sendResponse("250 File deleted.\r\n", "250 Đã xóa tệp tin: " + arg);
                 } else {
                     sendResponse("550 Failed to delete file.\r\n", "550 Xóa tệp tin thất bại");
@@ -188,6 +197,7 @@ public class ClientHandler implements Runnable {
                 } else {
                     File dst = resolvePath(arg);
                     if (dst != null && renameFrom.renameTo(dst)) {
+                        Database.logActivity(clientAddress, currentUsername, "RENAME", "Đổi tên từ '" + renameFrom.getName() + "' sang '" + dst.getName() + "'");
                         sendResponse("250 Rename successful.\r\n", "250 Đổi tên thành công: " + arg);
                     } else {
                         sendResponse("550 Rename failed.\r\n", "550 Đổi tên thất bại");
@@ -350,6 +360,7 @@ public class ClientHandler implements Runnable {
             dos.flush();
             dataSocket.close();
             sendResponse("226 Transfer complete.\r\n", "226 Gửi tệp '" + file.getName() + "' hoàn tất");
+            Database.logActivity(clientAddress, currentUsername, "DOWNLOAD", "Tải về tệp: " + file.getName() + " (" + file.length() + " bytes)");
         } catch (IOException e) {
             sendResponse("426 Connection closed; transfer aborted.\r\n", "426 Lỗi truyền tệp");
         } finally {
@@ -385,6 +396,8 @@ public class ClientHandler implements Runnable {
             fos.flush();
             dataSocket.close();
             sendResponse("226 Transfer complete.\r\n", "226 Lưu tệp '" + file.getName() + "' lên Server thành công");
+            Database.logFileUploaded(file.getName(), file.length(), currentUsername);
+            Database.logActivity(clientAddress, currentUsername, "UPLOAD", "Tải lên tệp: " + file.getName() + " (" + file.length() + " bytes)");
         } catch (IOException e) {
             sendResponse("426 Connection closed; transfer aborted.\r\n", "426 Lỗi nhận dữ liệu tệp");
         } finally {
