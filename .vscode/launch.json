@@ -1,0 +1,17 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "1. Run FtpServer",
+            "request": "launch",
+            "mainClass": "FtpServer"
+        },
+        {
+            "type": "java",
+            "name": "2. Run FtpClient",
+            "request": "launch",
+            "mainClass": "FtpClient"
+        }
+    ]
+}

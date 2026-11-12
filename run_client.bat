@@ -1,0 +1,19 @@
+@echo off
+chcp 65001 > nul
+title FTP Client - Lập trình mạng
+
+set "JAVA_CMD=java"
+set "JAVAC_CMD=javac"
+
+where javac >nul 2>nul
+if %errorlevel% neq 0 (
+    if exist "D:\Software\App\IntelliJ IDEA 2026.2.3\jbr\bin\javac.exe" (
+        set "JAVAC_CMD=D:\Software\App\IntelliJ IDEA 2026.2.3\jbr\bin\javac.exe"
+        set "JAVA_CMD=D:\Software\App\IntelliJ IDEA 2026.2.3\jbr\bin\java.exe"
+    )
+)
+
+if not exist "bin" mkdir "bin"
+"%JAVAC_CMD%" -encoding UTF-8 -cp "lib/*" -d bin src\*.java
+start "" "%JAVA_CMD%" -cp "bin;lib/*" FtpClient
+exit

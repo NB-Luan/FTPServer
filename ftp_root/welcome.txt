@@ -1,0 +1,6 @@
+Chào mừng bạn đến với FTP Server - Môn Lập trình mạng!
+Tài khoản thử nghiệm:
+- admin / 123456
+- user / 123456
+Server hỗ trợ đầy đủ các lệnh FTP cốt lõi và chế độ Passive Mode (PASV).
+
