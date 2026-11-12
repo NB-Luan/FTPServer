@@ -379,10 +379,6 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    private void sendResponse(String rawResponse) {
-        sendResponse(rawResponse, rawResponse.replace("\r", "").replace("\n", " ").trim());
-    }
-
     private void closeDataServer() {
         if (dataServerSocket != null && !dataServerSocket.isClosed()) {
             try {
