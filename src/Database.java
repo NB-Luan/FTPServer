@@ -4,8 +4,8 @@ import java.util.List;
 
 public class Database {
 
-    private static final String DB_URL_NO_DB = "jdbc:mysql://localhost:3306/?allowPublicKeyRetrieval=true&useSSL=false&maxAllowedPacket=67108864";
-    private static final String DB_URL = "jdbc:mysql://localhost:3306/ftp_db?allowPublicKeyRetrieval=true&useSSL=false&maxAllowedPacket=67108864";
+    private static final String DB_URL_NO_DB = "jdbc:mysql://localhost:3306/?allowPublicKeyRetrieval=true&useSSL=false&characterEncoding=UTF-8";
+    private static final String DB_URL = "jdbc:mysql://localhost:3306/ftp_db?allowPublicKeyRetrieval=true&useSSL=false&characterEncoding=UTF-8";
     private static final String DB_USER = "root";
     private static final String DB_PASS = "";
 
@@ -70,10 +70,15 @@ public class Database {
                     stmt.executeUpdate("ALTER TABLE files ADD UNIQUE (filename)");
                 } catch (Exception ignored) {}
 
-                // Thêm sẵn 1 file chào mừng welcome.txt trực tiếp vào Database
-                String sampleContent = "Chào mừng bạn đến với FTP Server!\nToàn bộ tệp tin, tài khoản và nhật ký được lưu trữ trực tiếp 100% trong Cơ sở dữ liệu MySQL (ftp_db).";
-                byte[] sampleBytes = sampleContent.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-                saveFile("welcome.txt", sampleBytes, "admin");
+                // Đánh dấu kết nối thành công trước khi thao tác file
+                isConnected = true;
+
+                // Thêm sẵn 1 file chào mừng welcome.txt trực tiếp vào Database nếu chưa có
+                if (getFileSize("welcome.txt") < 0) {
+                    String sampleContent = "Chào mừng bạn đến với FTP Server!\nToàn bộ tệp tin, tài khoản và nhật ký được lưu trữ trực tiếp 100% trong Cơ sở dữ liệu MySQL (ftp_db).";
+                    byte[] sampleBytes = sampleContent.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    saveFile("welcome.txt", sampleBytes, "admin");
+                }
 
                 // Bảng 3: ftp_logs (Lưu toàn bộ nhật ký giao dịch)
                 stmt.executeUpdate("CREATE TABLE IF NOT EXISTS ftp_logs ("

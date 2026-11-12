@@ -275,7 +275,6 @@ public class ClientHandler implements Runnable {
                 dw.write(line);
             }
             dw.flush();
-            dataSocket.close();
             sendResponse("226 Directory send OK.\r\n", "226 Đã gửi xong danh sách (" + files.size() + " tệp từ MySQL)");
         } catch (IOException e) {
             sendResponse("426 Connection closed; transfer aborted.\r\n", "426 Lỗi ngắt kết nối truyền dữ liệu");
@@ -306,7 +305,6 @@ public class ClientHandler implements Runnable {
 
             dos.write(fileData);
             dos.flush();
-            dataSocket.close();
             sendResponse("226 Transfer complete.\r\n", "226 Gửi tệp '" + fileName + "' từ MySQL hoàn tất");
             Database.logActivity(clientAddress, currentUsername, "DOWNLOAD", "Tải về tệp từ MySQL: " + fileName + " (" + fileData.length + " bytes)");
         } catch (IOException e) {
@@ -341,7 +339,6 @@ public class ClientHandler implements Runnable {
             while ((n = dis.read(buffer)) != -1) {
                 baos.write(buffer, 0, n);
             }
-            dataSocket.close();
 
             byte[] data = baos.toByteArray();
             boolean saved = Database.saveFile(fileName, data, currentUsername);
