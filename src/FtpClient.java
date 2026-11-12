@@ -27,7 +27,7 @@ public class FtpClient extends JFrame {
     private JButton btnDoLogin;
     private JButton btnDoRegister;
 
-    // --- Trang Quản lý File (Sau khi đăng nhập) ---
+    // --- Trang Quản lý File ---
     private JLabel lblUserInfo;
     private JLabel lblCurrentPath;
     private JButton btnLogout;
@@ -46,7 +46,7 @@ public class FtpClient extends JFrame {
 
     private JTextArea logArea;
 
-    // --- Biến Socket ---
+    // --- Socket & Phiên làm việc ---
     private Socket controlSocket;
     private BufferedReader reader;
     private BufferedWriter writer;
@@ -55,7 +55,7 @@ public class FtpClient extends JFrame {
     private String loggedInUser = "";
 
     public FtpClient() {
-        super("FTP Client - Hệ thống truyền tập tin");
+        super("FTP Client - Lập trình mạng");
         initUI();
     }
 
@@ -90,7 +90,7 @@ public class FtpClient extends JFrame {
     }
 
     /**
-     * Màn hình 1: Giao diện Đăng nhập & Đăng ký đơn giản, màu trắng
+     * Màn hình 1: Giao diện Đăng nhập & Đăng ký đơn giản
      */
     private JPanel createAuthPanel() {
         JPanel wrapper = new JPanel(new GridBagLayout());
@@ -100,201 +100,213 @@ public class FtpClient extends JFrame {
         box.setLayout(new BoxLayout(box, BoxLayout.Y_AXIS));
         box.setBackground(Color.WHITE);
         box.setBorder(BorderFactory.createCompoundBorder(
-                new LineBorder(new Color(220, 224, 230), 1, true),
-                new EmptyBorder(25, 30, 25, 30)
+                new LineBorder(new Color(220, 220, 220), 1, true),
+                new EmptyBorder(30, 40, 30, 40)
         ));
-        box.setPreferredSize(new Dimension(380, 370));
+        box.setPreferredSize(new Dimension(420, 420));
 
-        JLabel lblTitle = new JLabel("FTP CLIENT", SwingConstants.CENTER);
-        lblTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
+        JLabel lblTitle = new JLabel("HỆ THỐNG FTP");
         lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 22));
-        lblTitle.setForeground(new Color(24, 43, 73));
+        lblTitle.setForeground(new Color(40, 40, 40));
+        lblTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
         box.add(lblTitle);
 
-        JLabel lblSub = new JLabel("Điền tài khoản để Đăng nhập hoặc Đăng ký", SwingConstants.CENTER);
-        lblSub.setAlignmentX(Component.CENTER_ALIGNMENT);
+        JLabel lblSub = new JLabel("Đăng nhập hoặc đăng ký tài khoản");
         lblSub.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        lblSub.setForeground(new Color(110, 120, 135));
+        lblSub.setForeground(new Color(120, 120, 120));
+        lblSub.setAlignmentX(Component.CENTER_ALIGNMENT);
         box.add(lblSub);
-        box.add(Box.createVerticalStrut(20));
 
-        // Host & Port
-        JPanel hostPortPanel = new JPanel(new GridLayout(1, 2, 10, 0));
-        hostPortPanel.setBackground(Color.WHITE);
-        hostPortPanel.setMaximumSize(new Dimension(320, 45));
+        box.add(Box.createVerticalStrut(25));
 
-        JPanel hostBox = new JPanel(new BorderLayout(2, 2));
-        hostBox.setBackground(Color.WHITE);
-        hostBox.add(new JLabel("Host:"), BorderLayout.NORTH);
+        // IP Server & Port trên cùng 1 hàng
+        JPanel serverRow = new JPanel(new GridLayout(1, 2, 10, 0));
+        serverRow.setBackground(Color.WHITE);
+        serverRow.setMaximumSize(new Dimension(340, 55));
+
+        JPanel pHost = new JPanel(new BorderLayout(0, 4));
+        pHost.setBackground(Color.WHITE);
+        pHost.add(new JLabel("IP Server:"), BorderLayout.NORTH);
         txtLoginHost = new JTextField("127.0.0.1");
-        hostBox.add(txtLoginHost, BorderLayout.CENTER);
+        txtLoginHost.setPreferredSize(new Dimension(0, 30));
+        pHost.add(txtLoginHost, BorderLayout.CENTER);
+        serverRow.add(pHost);
 
-        JPanel portBox = new JPanel(new BorderLayout(2, 2));
-        portBox.setBackground(Color.WHITE);
-        portBox.add(new JLabel("Port:"), BorderLayout.NORTH);
+        JPanel pPort = new JPanel(new BorderLayout(0, 4));
+        pPort.setBackground(Color.WHITE);
+        pPort.add(new JLabel("Port:"), BorderLayout.NORTH);
         txtLoginPort = new JTextField("2121");
-        portBox.add(txtLoginPort, BorderLayout.CENTER);
+        txtLoginPort.setPreferredSize(new Dimension(0, 30));
+        pPort.add(txtLoginPort, BorderLayout.CENTER);
+        serverRow.add(pPort);
 
-        hostPortPanel.add(hostBox);
-        hostPortPanel.add(portBox);
-        box.add(hostPortPanel);
+        box.add(serverRow);
         box.add(Box.createVerticalStrut(12));
 
-        // Username
-        JPanel userBox = new JPanel(new BorderLayout(2, 2));
-        userBox.setBackground(Color.WHITE);
-        userBox.setMaximumSize(new Dimension(320, 48));
-        userBox.add(new JLabel("Tên tài khoản:"), BorderLayout.NORTH);
+        // Tên tài khoản
+        JPanel pUser = new JPanel(new BorderLayout(0, 4));
+        pUser.setBackground(Color.WHITE);
+        pUser.setMaximumSize(new Dimension(340, 55));
+        pUser.add(new JLabel("Tên tài khoản:"), BorderLayout.NORTH);
         txtLoginUser = new JTextField("admin");
-        txtLoginUser.setPreferredSize(new Dimension(320, 28));
-        userBox.add(txtLoginUser, BorderLayout.CENTER);
-        box.add(userBox);
-        box.add(Box.createVerticalStrut(10));
+        txtLoginUser.setPreferredSize(new Dimension(0, 30));
+        pUser.add(txtLoginUser, BorderLayout.CENTER);
+        box.add(pUser);
 
-        // Password
-        JPanel passBox = new JPanel(new BorderLayout(2, 2));
-        passBox.setBackground(Color.WHITE);
-        passBox.setMaximumSize(new Dimension(320, 48));
-        passBox.add(new JLabel("Mật khẩu:"), BorderLayout.NORTH);
+        box.add(Box.createVerticalStrut(12));
+
+        // Mật khẩu
+        JPanel pPass = new JPanel(new BorderLayout(0, 4));
+        pPass.setBackground(Color.WHITE);
+        pPass.setMaximumSize(new Dimension(340, 55));
+        pPass.add(new JLabel("Mật khẩu:"), BorderLayout.NORTH);
         txtLoginPass = new JPasswordField("123456");
-        txtLoginPass.setPreferredSize(new Dimension(320, 28));
-        passBox.add(txtLoginPass, BorderLayout.CENTER);
-        box.add(passBox);
-        box.add(Box.createVerticalStrut(22));
+        txtLoginPass.setPreferredSize(new Dimension(0, 30));
+        pPass.add(txtLoginPass, BorderLayout.CENTER);
+        box.add(pPass);
 
-        // Nút cơ bản: Đăng nhập & Đăng ký
-        JPanel btnPanel = new JPanel(new GridLayout(1, 2, 10, 0));
-        btnPanel.setBackground(Color.WHITE);
-        btnPanel.setMaximumSize(new Dimension(320, 32));
+        box.add(Box.createVerticalStrut(24));
+
+        // 2 nút Đăng nhập & Đăng ký
+        JPanel btnRow = new JPanel(new GridLayout(1, 2, 12, 0));
+        btnRow.setBackground(Color.WHITE);
+        btnRow.setMaximumSize(new Dimension(340, 36));
 
         btnDoLogin = new JButton("Đăng nhập");
-        btnDoRegister = new JButton("Đăng ký");
+        btnDoLogin.setPreferredSize(new Dimension(0, 36));
+        btnRow.add(btnDoLogin);
 
-        btnPanel.add(btnDoLogin);
-        btnPanel.add(btnDoRegister);
-        box.add(btnPanel);
+        btnDoRegister = new JButton("Đăng ký");
+        btnDoRegister.setPreferredSize(new Dimension(0, 36));
+        btnRow.add(btnDoRegister);
+
+        box.add(btnRow);
 
         wrapper.add(box);
 
         btnDoLogin.addActionListener(e -> performLogin());
         btnDoRegister.addActionListener(e -> performRegister());
+        txtLoginPass.addActionListener(e -> performLogin());
 
         return wrapper;
     }
 
     /**
-     * Màn hình 2: Giao diện Quản lý File chính (Màu trắng, sạch sẽ)
+     * Màn hình 2: Quản lý File
      */
     private JPanel createMainPanel() {
         JPanel main = new JPanel(new BorderLayout(8, 8));
         main.setBackground(Color.WHITE);
-        main.setBorder(new EmptyBorder(10, 12, 10, 12));
+        main.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        // Header trên cùng
-        JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBackground(Color.WHITE);
-        headerPanel.setBorder(BorderFactory.createCompoundBorder(
+        // Thanh Header
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBackground(Color.WHITE);
+        header.setBorder(BorderFactory.createCompoundBorder(
                 new LineBorder(new Color(230, 230, 230), 1),
                 new EmptyBorder(8, 12, 8, 12)
         ));
 
-        lblUserInfo = new JLabel("Đã kết nối với tư cách: admin");
+        lblUserInfo = new JLabel("Đang đăng nhập với tài khoản: ...");
         lblUserInfo.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        lblUserInfo.setForeground(new Color(40, 167, 69));
+        lblUserInfo.setForeground(new Color(30, 30, 30));
 
         btnLogout = new JButton("Đăng xuất");
+        header.add(lblUserInfo, BorderLayout.WEST);
+        header.add(btnLogout, BorderLayout.EAST);
+        main.add(header, BorderLayout.NORTH);
 
-        headerPanel.add(lblUserInfo, BorderLayout.WEST);
-        headerPanel.add(btnLogout, BorderLayout.EAST);
-        main.add(headerPanel, BorderLayout.NORTH);
-
-        // Center: Bảng file + Thanh công cụ
+        // Khung Giữa: Bảng file + Thanh công cụ
         JPanel centerPanel = new JPanel(new BorderLayout(6, 6));
         centerPanel.setBackground(Color.WHITE);
 
-        // Thanh đường dẫn
-        JPanel pathPanel = new JPanel(new BorderLayout(6, 6));
-        pathPanel.setBackground(Color.WHITE);
+        // Thanh điều hướng
+        JPanel navBar = new JPanel(new BorderLayout(6, 0));
+        navBar.setBackground(Color.WHITE);
 
         lblCurrentPath = new JLabel(" Thư mục: /");
-        lblCurrentPath.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        pathPanel.add(lblCurrentPath, BorderLayout.WEST);
+        lblCurrentPath.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        lblCurrentPath.setForeground(new Color(50, 50, 50));
 
-        JPanel pathBtn = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
-        pathBtn.setBackground(Color.WHITE);
-        btnUp = new JButton("Lên thư mục cha (CDUP)");
-        btnRefresh = new JButton("Làm mới (LIST)");
-        pathBtn.add(btnUp);
-        pathBtn.add(btnRefresh);
-        pathPanel.add(pathBtn, BorderLayout.EAST);
+        JPanel navButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        navButtons.setBackground(Color.WHITE);
+        btnUp = new JButton("Lên thư mục cha");
+        btnRefresh = new JButton("Làm mới");
+        navButtons.add(btnUp);
+        navButtons.add(btnRefresh);
 
-        centerPanel.add(pathPanel, BorderLayout.NORTH);
+        navBar.add(lblCurrentPath, BorderLayout.WEST);
+        navBar.add(navButtons, BorderLayout.EAST);
+        centerPanel.add(navBar, BorderLayout.NORTH);
 
-        // Bảng danh sách file
-        String[] columns = {"Loại", "Tên tệp tin / Thư mục", "Kích thước (Bytes)", "Ngày sửa đổi"};
+        // Bảng file
+        String[] columns = {"Loại", "Tên tập tin / Thư mục", "Kích thước (Bytes)", "Thời gian cập nhật"};
         tableModel = new DefaultTableModel(columns, 0) {
             @Override
-            public boolean isCellEditable(int row, int col) { return false; }
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
         };
+
         fileTable = new JTable(tableModel);
-        fileTable.setBackground(Color.WHITE);
-        fileTable.setForeground(new Color(33, 37, 41));
-        fileTable.setGridColor(new Color(240, 240, 240));
-        fileTable.setRowHeight(24);
-        fileTable.setSelectionBackground(new Color(210, 235, 255));
-        fileTable.setSelectionForeground(Color.BLACK);
-        fileTable.getTableHeader().setBackground(new Color(245, 247, 250));
+        fileTable.setRowHeight(26);
+        fileTable.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         fileTable.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 12));
+        fileTable.getTableHeader().setBackground(new Color(245, 245, 245));
+        fileTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        fileTable.setShowGrid(true);
+        fileTable.setGridColor(new Color(235, 235, 235));
+        fileTable.setBackground(Color.WHITE);
 
         fileTable.getColumnModel().getColumn(0).setPreferredWidth(80);
-        fileTable.getColumnModel().getColumn(1).setPreferredWidth(350);
-        fileTable.getColumnModel().getColumn(2).setPreferredWidth(130);
-        fileTable.getColumnModel().getColumn(3).setPreferredWidth(160);
+        fileTable.getColumnModel().getColumn(1).setPreferredWidth(320);
+        fileTable.getColumnModel().getColumn(2).setPreferredWidth(120);
+        fileTable.getColumnModel().getColumn(3).setPreferredWidth(180);
 
         DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
-        centerRenderer.setHorizontalAlignment(JLabel.CENTER);
+        centerRenderer.setHorizontalAlignment(SwingConstants.CENTER);
         fileTable.getColumnModel().getColumn(0).setCellRenderer(centerRenderer);
 
         JScrollPane tableScroll = new JScrollPane(fileTable);
         tableScroll.getViewport().setBackground(Color.WHITE);
-        tableScroll.setBorder(new LineBorder(new Color(225, 225, 225), 1));
+        tableScroll.setBorder(new LineBorder(new Color(220, 220, 220), 1));
         centerPanel.add(tableScroll, BorderLayout.CENTER);
 
-        // Thanh công cụ thao tác file
-        JPanel fileActionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
-        fileActionPanel.setBackground(Color.WHITE);
-        btnUpload = new JButton("Upload File");
-        btnDownload = new JButton("Download File");
-        btnView = new JButton("Mở xem file");
+        // Thanh nút bấm chức năng
+        JPanel actionsBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
+        actionsBar.setBackground(Color.WHITE);
+
+        btnUpload = new JButton("Upload");
+        btnDownload = new JButton("Download");
+        btnView = new JButton("Xem file");
         btnNewFolder = new JButton("Tạo thư mục");
         btnRename = new JButton("Đổi tên");
         btnDelete = new JButton("Xóa");
-        btnClearLog = new JButton("Xóa nhật ký");
+        btnClearLog = new JButton("Xóa Log");
 
-        fileActionPanel.add(btnUpload);
-        fileActionPanel.add(btnDownload);
-        fileActionPanel.add(btnView);
-        fileActionPanel.add(btnNewFolder);
-        fileActionPanel.add(btnRename);
-        fileActionPanel.add(btnDelete);
-        fileActionPanel.add(btnClearLog);
-        centerPanel.add(fileActionPanel, BorderLayout.SOUTH);
+        actionsBar.add(btnUpload);
+        actionsBar.add(btnDownload);
+        actionsBar.add(btnView);
+        actionsBar.add(btnNewFolder);
+        actionsBar.add(btnRename);
+        actionsBar.add(btnDelete);
+        actionsBar.add(btnClearLog);
 
-        // Khung Nhật ký Log (Màu trắng, format dễ đọc)
-        logArea = new JTextArea(8, 50);
+        centerPanel.add(actionsBar, BorderLayout.SOUTH);
+        main.add(centerPanel, BorderLayout.CENTER);
+
+        // Khung in Log
+        logArea = new JTextArea();
         logArea.setEditable(false);
         logArea.setFont(new Font("Consolas", Font.PLAIN, 12));
         logArea.setBackground(Color.WHITE);
-        logArea.setForeground(new Color(35, 35, 35));
+        logArea.setForeground(new Color(30, 30, 30));
 
         JScrollPane logScroll = new JScrollPane(logArea);
+        logScroll.setPreferredSize(new Dimension(0, 140));
+        logScroll.setBorder(BorderFactory.createTitledBorder("Nhật ký"));
         logScroll.getViewport().setBackground(Color.WHITE);
-        logScroll.setBorder(BorderFactory.createTitledBorder(new LineBorder(new Color(225, 225, 225), 1), "Nhật ký truyền tin FTP"));
-
-        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, centerPanel, logScroll);
-        splitPane.setResizeWeight(0.65);
-        splitPane.setBackground(Color.WHITE);
-        main.add(splitPane, BorderLayout.CENTER);
+        main.add(logScroll, BorderLayout.SOUTH);
 
         // Sự kiện các nút
         btnLogout.addActionListener(e -> disconnect());
@@ -308,7 +320,7 @@ public class FtpClient extends JFrame {
         btnDelete.addActionListener(e -> delete());
         btnClearLog.addActionListener(e -> logArea.setText(""));
 
-        // Double click: nếu là Folder thì vào trong, nếu là File thì MỞ XEM NGAY
+        // Double click: nếu là Folder thì vào trong, nếu là File thì mở xem
         fileTable.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -328,9 +340,6 @@ public class FtpClient extends JFrame {
         return main;
     }
 
-    /**
-     * Xử lý ĐĂNG NHẬP
-     */
     private void performLogin() {
         String host = txtLoginHost.getText().trim();
         int port;
@@ -375,12 +384,12 @@ public class FtpClient extends JFrame {
                 loggedInUser = user;
 
                 SwingUtilities.invokeLater(() -> {
-                    lblUserInfo.setText("Đang đăng nhập với tài khoản: " + loggedInUser + " (" + host + ":" + port + ")");
+                    lblUserInfo.setText("Tài khoản: " + loggedInUser + " (" + host + ":" + port + ")");
                     cardLayout.show(cardsPanel, "MAIN");
                     btnDoLogin.setEnabled(true);
                 });
 
-                log("[HOẠT ĐỘNG]  Đăng nhập thành công với tài khoản '" + loggedInUser + "'");
+                log("Đăng nhập thành công (" + loggedInUser + ")");
                 updatePwd();
                 refreshList();
             } catch (Exception ex) {
@@ -393,9 +402,6 @@ public class FtpClient extends JFrame {
         }).start();
     }
 
-    /**
-     * Xử lý ĐĂNG KÝ
-     */
     private void performRegister() {
         String host = txtLoginHost.getText().trim();
         int port;
@@ -520,9 +526,8 @@ public class FtpClient extends JFrame {
                     tableModel.setRowCount(0);
                     for (Object[] r : rows) tableModel.addRow(r);
                 });
-                log("[HOẠT ĐỘNG]  Đã làm mới danh sách thư mục (" + rows.size() + " mục)");
             } catch (Exception e) {
-                log("[LỖI LIST]   " + e.getMessage());
+                log("Lỗi làm mới danh sách: " + e.getMessage());
             }
         }).start();
     }
@@ -554,7 +559,7 @@ public class FtpClient extends JFrame {
                     JOptionPane.showMessageDialog(this, "Không thể chuyển thư mục: " + res);
                 }
             } catch (Exception e) {
-                log("[LỖI CWD]    " + e.getMessage());
+                log("Lỗi CWD: " + e.getMessage());
             }
         }).start();
     }
@@ -567,7 +572,7 @@ public class FtpClient extends JFrame {
                 updatePwd();
                 refreshList();
             } catch (Exception e) {
-                log("[LỖI CDUP]   " + e.getMessage());
+                log("Lỗi CDUP: " + e.getMessage());
             }
         }).start();
     }
@@ -578,7 +583,6 @@ public class FtpClient extends JFrame {
             File file = chooser.getSelectedFile();
             new Thread(() -> {
                 try {
-                    log("[HOẠT ĐỘNG]  Bắt đầu upload: " + file.getName() + " (" + file.length() + " bytes)");
                     Socket dataSocket = enterPassiveMode();
                     sendCommand("STOR " + file.getName());
                     readResponse();
@@ -592,11 +596,11 @@ public class FtpClient extends JFrame {
                     }
                     dataSocket.close();
                     readResponse();
-                    log("[HOẠT ĐỘNG]  Upload thành công: " + file.getName());
+                    log("Upload thành công: " + file.getName() + " (" + formatSize(file.length()) + ")");
                     refreshList();
                     SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "Upload thành công!"));
                 } catch (Exception e) {
-                    log("[LỖI STOR]   " + e.getMessage());
+                    log("Lỗi upload: " + e.getMessage());
                 }
             }).start();
         }
@@ -621,7 +625,6 @@ public class FtpClient extends JFrame {
             File saveFile = chooser.getSelectedFile();
             new Thread(() -> {
                 try {
-                    log("[HOẠT ĐỘNG]  Bắt đầu download: " + name);
                     Socket dataSocket = enterPassiveMode();
                     sendCommand("RETR " + name);
                     readResponse();
@@ -635,18 +638,15 @@ public class FtpClient extends JFrame {
                     }
                     dataSocket.close();
                     readResponse();
-                    log("[HOẠT ĐỘNG]  Download thành công -> " + saveFile.getAbsolutePath());
+                    log("Download thành công: " + name);
                     SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "Download thành công!"));
                 } catch (Exception e) {
-                    log("[LỖI RETR]   " + e.getMessage());
+                    log("Lỗi download: " + e.getMessage());
                 }
             }).start();
         }
     }
 
-    /**
-     * MỞ XEM FILE: Tải tạm file về thư mục Temp và mở ngay bằng ứng dụng của Windows
-     */
     private void openSelectedFile() {
         int row = fileTable.getSelectedRow();
         if (row == -1) {
@@ -665,7 +665,6 @@ public class FtpClient extends JFrame {
     private void viewFile(String name) {
         new Thread(() -> {
             try {
-                log("[HOẠT ĐỘNG]  Đang tải file '" + name + "' để mở xem...");
                 Socket dataSocket = enterPassiveMode();
                 sendCommand("RETR " + name);
                 String res = readResponse();
@@ -690,16 +689,15 @@ public class FtpClient extends JFrame {
                 dataSocket.close();
                 readResponse();
 
-                log("[HOẠT ĐỘNG]  Đã tải xong. Đang mở file '" + name + "'...");
+                log("Mở xem: " + name);
 
-                // Mở file bằng ứng dụng mặc định của Windows
                 if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
                     Desktop.getDesktop().open(tempFile);
                 } else {
                     new ProcessBuilder("notepad.exe", tempFile.getAbsolutePath()).start();
                 }
             } catch (Exception e) {
-                log("[LỖI XEM FILE] " + e.getMessage());
+                log("Lỗi mở xem file: " + e.getMessage());
                 SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "Lỗi mở file: " + e.getMessage()));
             }
         }).start();
@@ -712,10 +710,14 @@ public class FtpClient extends JFrame {
                 try {
                     sendCommand("MKD " + name.trim());
                     String res = readResponse();
-                    if (res.startsWith("257")) refreshList();
-                    else JOptionPane.showMessageDialog(this, "Tạo thư mục thất bại: " + res);
+                    if (res.startsWith("257")) {
+                        log("Tạo thư mục: " + name.trim());
+                        refreshList();
+                    } else {
+                        JOptionPane.showMessageDialog(this, "Tạo thư mục thất bại: " + res);
+                    }
                 } catch (Exception e) {
-                    log("[LỖI MKD]    " + e.getMessage());
+                    log("Lỗi MKD: " + e.getMessage());
                 }
             }).start();
         }
@@ -737,13 +739,17 @@ public class FtpClient extends JFrame {
                     if (res.startsWith("350")) {
                         sendCommand("RNTO " + newName.trim());
                         res = readResponse();
-                        if (res.startsWith("250")) refreshList();
-                        else JOptionPane.showMessageDialog(this, "Đổi tên thất bại: " + res);
+                        if (res.startsWith("250")) {
+                            log("Đổi tên: " + oldName + " -> " + newName.trim());
+                            refreshList();
+                        } else {
+                            JOptionPane.showMessageDialog(this, "Đổi tên thất bại: " + res);
+                        }
                     } else {
                         JOptionPane.showMessageDialog(this, "Không tìm thấy file: " + res);
                     }
                 } catch (Exception e) {
-                    log("[LỖI RENAME] " + e.getMessage());
+                    log("Lỗi đổi tên: " + e.getMessage());
                 }
             }).start();
         }
@@ -764,10 +770,14 @@ public class FtpClient extends JFrame {
                     String cmd = "[Folder]".equals(type) ? "RMD " : "DELE ";
                     sendCommand(cmd + name);
                     String res = readResponse();
-                    if (res.startsWith("250")) refreshList();
-                    else JOptionPane.showMessageDialog(this, "Xóa thất bại: " + res);
+                    if (res.startsWith("250")) {
+                        log("Đã xóa: " + name);
+                        refreshList();
+                    } else {
+                        JOptionPane.showMessageDialog(this, "Xóa thất bại: " + res);
+                    }
                 } catch (Exception e) {
-                    log("[LỖI XÓA]   " + e.getMessage());
+                    log("Lỗi xóa: " + e.getMessage());
                 }
             }).start();
         }
@@ -776,15 +786,18 @@ public class FtpClient extends JFrame {
     private void sendCommand(String cmd) throws IOException {
         writer.write(cmd + "\r\n");
         writer.flush();
-        String display = cmd.toUpperCase().startsWith("PASS ") ? "PASS ******" : cmd;
-        log("[CLIENT GỬI]  --> " + display);
     }
 
     private String readResponse() throws IOException {
         String line = reader.readLine();
         if (line == null) throw new IOException("Mất kết nối với Server!");
-        log("[SERVER BÁO]  <-- " + line);
         return line;
+    }
+
+    private String formatSize(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return String.format(java.util.Locale.ENGLISH, "%.1f KB", bytes / 1024.0);
+        return String.format(java.util.Locale.ENGLISH, "%.1f MB", bytes / (1024.0 * 1024.0));
     }
 
     private void log(String msg) {

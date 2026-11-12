@@ -23,12 +23,11 @@ public class Database {
         }
     }
 
-    // Tự động khởi tạo Database và 3 Bảng trong MySQL XAMPP
     public static synchronized void init() {
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
 
-            // 1. Tạo database ftp_db nếu chưa có
+            // Tạo database ftp_db nếu chưa có
             try (Connection conn = DriverManager.getConnection(DB_URL_NO_DB, DB_USER, DB_PASS);
                  Statement stmt = conn.createStatement()) {
                 stmt.executeUpdate("CREATE DATABASE IF NOT EXISTS ftp_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
@@ -37,11 +36,10 @@ public class Database {
                 } catch (Exception ignored) {}
             }
 
-            // 2. Tạo 3 bảng: users, files (LONGBLOB), ftp_logs
+            // Tạo các bảng: users, files, ftp_logs
             try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
                  Statement stmt = conn.createStatement()) {
 
-                // Bảng 1: users (Quản lý tài khoản)
                 stmt.executeUpdate("CREATE TABLE IF NOT EXISTS users ("
                         + "id INT AUTO_INCREMENT PRIMARY KEY, "
                         + "username VARCHAR(50) UNIQUE NOT NULL, "
@@ -52,7 +50,6 @@ public class Database {
                 stmt.executeUpdate("INSERT IGNORE INTO users (username, password) VALUES ('admin', '123456')");
                 stmt.executeUpdate("INSERT IGNORE INTO users (username, password) VALUES ('user', '123456')");
 
-                // Bảng 2: files (LƯU TOÀN BỘ NỘI DUNG FILE TRỰC TIẾP DẠNG LONGBLOB - KHÔNG DÙNG THƯ MỤC Ổ ĐĨA)
                 stmt.executeUpdate("CREATE TABLE IF NOT EXISTS files ("
                         + "id INT AUTO_INCREMENT PRIMARY KEY, "
                         + "filename VARCHAR(255) UNIQUE NOT NULL, "
@@ -62,7 +59,6 @@ public class Database {
                         + "uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
                         + ")");
 
-                // Tự động nâng cấp bảng nếu tạo từ phiên bản cũ thiếu cột filedata
                 try {
                     stmt.executeUpdate("ALTER TABLE files ADD COLUMN filedata LONGBLOB");
                 } catch (Exception ignored) {}
@@ -70,17 +66,13 @@ public class Database {
                     stmt.executeUpdate("ALTER TABLE files ADD UNIQUE (filename)");
                 } catch (Exception ignored) {}
 
-                // Đánh dấu kết nối thành công trước khi thao tác file
                 isConnected = true;
 
-                // Thêm sẵn 1 file chào mừng welcome.txt trực tiếp vào Database nếu chưa có
                 if (getFileSize("welcome.txt") < 0) {
-                    String sampleContent = "Chào mừng bạn đến với FTP Server!\nToàn bộ tệp tin, tài khoản và nhật ký được lưu trữ trực tiếp 100% trong Cơ sở dữ liệu MySQL (ftp_db).";
-                    byte[] sampleBytes = sampleContent.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    byte[] sampleBytes = "Chào mừng bạn đến với FTP Server!\r\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
                     saveFile("welcome.txt", sampleBytes, "admin");
                 }
 
-                // Bảng 3: ftp_logs (Lưu toàn bộ nhật ký giao dịch)
                 stmt.executeUpdate("CREATE TABLE IF NOT EXISTS ftp_logs ("
                         + "id INT AUTO_INCREMENT PRIMARY KEY, "
                         + "client_ip VARCHAR(50), "
@@ -92,10 +84,8 @@ public class Database {
             }
 
             isConnected = true;
-            System.out.println("[DATABASE] Kết nối MySQL XAMPP thành công! Đã chuyển 100% tệp tin sang bảng files (LONGBLOB).");
         } catch (Exception e) {
             isConnected = false;
-            System.err.println("[DATABASE ERROR] Không thể kết nối MySQL XAMPP: " + e.getMessage());
         }
     }
 
@@ -103,10 +93,7 @@ public class Database {
         return isConnected;
     }
 
-    // ==========================================
-    // 1. QUẢN LÝ TÀI KHOẢN (BẢNG USERS)
-    // ==========================================
-
+    // Tài khoản
     public static boolean checkLogin(String username, String password) {
         if (!isConnected) return false;
         String sql = "SELECT id FROM users WHERE username = ? AND password = ?";
@@ -139,11 +126,7 @@ public class Database {
         }
     }
 
-    // ==========================================
-    // 2. QUẢN LÝ TỆP TIN TRONG MYSQL (BẢNG FILES - LONGBLOB)
-    // ==========================================
-
-    // Lưu tệp tin vào cột LONGBLOB trong MySQL (Upload)
+    // Quản lý file trong MySQL
     public static boolean saveFile(String filename, byte[] data, String uploader) {
         if (!isConnected) return false;
         String sql = "INSERT INTO files (filename, filesize, filedata, uploader) VALUES (?, ?, ?, ?) "
@@ -157,12 +140,10 @@ public class Database {
             ps.executeUpdate();
             return true;
         } catch (SQLException e) {
-            System.err.println("[DATABASE ERROR] Lỗi lưu file vào MySQL: " + e.getMessage());
             return false;
         }
     }
 
-    // Lấy nội dung byte[] của tệp tin từ MySQL (Download)
     public static byte[] getFileData(String filename) {
         if (!isConnected) return null;
         String sql = "SELECT filedata FROM files WHERE filename = ?";
@@ -174,13 +155,10 @@ public class Database {
                     return rs.getBytes("filedata");
                 }
             }
-        } catch (SQLException e) {
-            System.err.println("[DATABASE ERROR] Lỗi đọc file từ MySQL: " + e.getMessage());
-        }
+        } catch (SQLException ignored) {}
         return null;
     }
 
-    // Lấy kích thước tệp tin (SIZE)
     public static long getFileSize(String filename) {
         if (!isConnected) return -1;
         String sql = "SELECT filesize FROM files WHERE filename = ?";
@@ -194,7 +172,6 @@ public class Database {
         return -1;
     }
 
-    // Xóa tệp tin khỏi MySQL (DELE)
     public static boolean deleteFile(String filename) {
         if (!isConnected) return false;
         String sql = "DELETE FROM files WHERE filename = ?";
@@ -207,7 +184,6 @@ public class Database {
         }
     }
 
-    // Đổi tên tệp tin trong MySQL (RNFR / RNTO)
     public static boolean renameFile(String oldName, String newName) {
         if (!isConnected) return false;
         String sql = "UPDATE files SET filename = ? WHERE filename = ?";
@@ -221,7 +197,6 @@ public class Database {
         }
     }
 
-    // Lấy danh sách tệp tin để gửi cho Client (LIST)
     public static List<FileItem> listFiles() {
         List<FileItem> list = new ArrayList<>();
         if (!isConnected) return list;
@@ -236,25 +211,20 @@ public class Database {
                         rs.getTimestamp("uploaded_at")
                 ));
             }
-        } catch (SQLException e) {
-            System.err.println("[DATABASE ERROR] Lỗi lấy danh sách file từ MySQL: " + e.getMessage());
-        }
+        } catch (SQLException ignored) {}
         return list;
     }
 
-    // ==========================================
-    // 3. QUẢN LÝ NHẬT KÝ (BẢNG FTP_LOGS)
-    // ==========================================
-
+    // Nhật ký
     public static void logActivity(String clientIp, String username, String action, String details) {
         if (!isConnected) return;
         String sql = "INSERT INTO ftp_logs (client_ip, username, action, details) VALUES (?, ?, ?, ?)";
         try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, clientIp);
-            ps.setString(2, username != null ? username : "chưa đăng nhập");
+            ps.setString(2, username != null ? username : "");
             ps.setString(3, action);
-            ps.setString(4, details);
+            ps.setString(4, details != null ? details : "");
             ps.executeUpdate();
         } catch (SQLException ignored) {}
     }
