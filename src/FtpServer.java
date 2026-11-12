@@ -3,7 +3,7 @@ import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.io.*;
+import java.io.IOException;
 import java.net.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -13,8 +13,6 @@ public class FtpServer extends JFrame {
 
     private JComboBox<String> cbIp;
     private JTextField txtPort;
-    private JTextField txtRootDir;
-    private JButton btnBrowse;
     private JButton btnStartStop;
     private JButton btnClearLog;
     private JLabel lblStatus;
@@ -35,13 +33,14 @@ public class FtpServer extends JFrame {
     }
 
     public FtpServer() {
-        super("FTP Server - LTM");
+        super("FTP Server - LTM (Lưu trữ MySQL Database)");
         initUI();
         Database.init();
         if (Database.isConnected()) {
-            log("[CSDL MYSQL]  Kết nối MySQL XAMPP (ftp_db -> bảng users) thành công!");
+            log("[CSDL MYSQL]  Kết nối MySQL XAMPP (ftp_db -> files, users, ftp_logs) thành công!");
+            log("[LƯU TRỮ]     100% tệp tin được lưu trực tiếp dạng LONGBLOB trong CSDL MySQL (Không dùng thư mục cục bộ).");
         } else {
-            log("[CSDL MYSQL]  Chưa bật MySQL XAMPP (Đang dùng tài khoản mặc định admin/123456).");
+            log("[CSDL MYSQL]  Chưa bật MySQL XAMPP! Vui lòng bật MySQL trong XAMPP Control Panel.");
         }
     }
 
@@ -50,19 +49,22 @@ public class FtpServer extends JFrame {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception ignored) {}
 
-        setSize(820, 560);
-        setMinimumSize(new Dimension(720, 480));
+        setSize(860, 580);
+        setMinimumSize(new Dimension(740, 500));
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        getContentPane().setBackground(Color.WHITE);
 
         JPanel mainPanel = new JPanel(new BorderLayout(8, 8));
         mainPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
+        mainPanel.setBackground(Color.WHITE);
 
         // Panel cấu hình
         JPanel configPanel = new JPanel(new GridBagLayout());
-        configPanel.setBorder(BorderFactory.createTitledBorder("Cấu hình"));
+        configPanel.setBorder(BorderFactory.createTitledBorder("Cấu hình Server"));
+        configPanel.setBackground(Color.WHITE);
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(4, 5, 4, 5);
+        gbc.insets = new Insets(5, 6, 5, 6);
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         // Dòng 1: IP, Port, Start/Stop, Xóa log
@@ -72,6 +74,7 @@ public class FtpServer extends JFrame {
         gbc.gridx = 1; gbc.gridy = 0; gbc.weightx = 0.5;
         cbIp = new JComboBox<>(getAvailableIpAddresses().toArray(new String[0]));
         cbIp.setEditable(true);
+        cbIp.setBackground(Color.WHITE);
         configPanel.add(cbIp, gbc);
 
         gbc.gridx = 2; gbc.gridy = 0; gbc.weightx = 0;
@@ -89,24 +92,20 @@ public class FtpServer extends JFrame {
         btnClearLog = new JButton("Xóa Log");
         configPanel.add(btnClearLog, gbc);
 
-        // Dòng 2: Root Folder, Nút chọn, Trạng thái
+        // Dòng 2: Thông tin Lưu trữ MySQL Database & Trạng thái chạy
         gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0;
-        configPanel.add(new JLabel("Root Folder:"), gbc);
+        configPanel.add(new JLabel("Lưu trữ CSDL:"), gbc);
 
-        gbc.gridx = 1; gbc.gridy = 1; gbc.gridwidth = 3; gbc.weightx = 0.7;
-        File defaultRoot = new File(System.getProperty("user.dir"), "ftp_root");
-        if (!defaultRoot.exists()) defaultRoot.mkdirs();
-        txtRootDir = new JTextField(defaultRoot.getAbsolutePath());
-        configPanel.add(txtRootDir, gbc);
+        gbc.gridx = 1; gbc.gridy = 1; gbc.gridwidth = 4; gbc.weightx = 0.8;
+        JLabel lblStorage = new JLabel("MySQL: 'ftp_db' -> Bảng files (LONGBLOB) | users | ftp_logs");
+        lblStorage.setFont(lblStorage.getFont().deriveFont(Font.BOLD, 12f));
+        lblStorage.setForeground(new Color(0, 102, 204));
+        configPanel.add(lblStorage, gbc);
 
-        gbc.gridx = 4; gbc.gridy = 1; gbc.gridwidth = 1; gbc.weightx = 0;
-        btnBrowse = new JButton("Chọn...");
-        configPanel.add(btnBrowse, gbc);
-
-        gbc.gridx = 5; gbc.gridy = 1; gbc.weightx = 0;
+        gbc.gridx = 5; gbc.gridy = 1; gbc.gridwidth = 1; gbc.weightx = 0;
         lblStatus = new JLabel("● ĐÃ DỪNG", SwingConstants.CENTER);
         lblStatus.setForeground(new Color(220, 53, 69));
-        lblStatus.setFont(lblStatus.getFont().deriveFont(Font.BOLD));
+        lblStatus.setFont(lblStatus.getFont().deriveFont(Font.BOLD, 12f));
         configPanel.add(lblStatus, gbc);
 
         mainPanel.add(configPanel, BorderLayout.NORTH);
@@ -119,12 +118,14 @@ public class FtpServer extends JFrame {
         logArea.setForeground(new Color(30, 30, 30));
 
         JScrollPane scrollPane = new JScrollPane(logArea);
-        scrollPane.setBorder(BorderFactory.createTitledBorder("Nhật ký FTP"));
+        scrollPane.setBorder(BorderFactory.createTitledBorder("Nhật ký Server (Tiếng Việt)"));
+        scrollPane.getViewport().setBackground(Color.WHITE);
         mainPanel.add(scrollPane, BorderLayout.CENTER);
 
         // Thanh trạng thái dưới cùng
         JPanel bottomPanel = new JPanel(new BorderLayout());
-        JLabel lblAccounts = new JLabel("  Tài khoản: admin/123456 | user/123456 (Chế độ PASV)");
+        bottomPanel.setBackground(Color.WHITE);
+        JLabel lblAccounts = new JLabel("  Tài khoản CSDL: admin/123456 | user/123456 | Chế độ truyền: PASV");
         lblAccounts.setForeground(new Color(100, 100, 100));
         lblClientCount = new JLabel("Đang kết nối: 0   ");
         lblClientCount.setForeground(new Color(100, 100, 100));
@@ -136,7 +137,6 @@ public class FtpServer extends JFrame {
         add(mainPanel);
 
         // Bắt sự kiện
-        btnBrowse.addActionListener(e -> chooseRootFolder());
         btnStartStop.addActionListener(e -> toggleServer());
         btnClearLog.addActionListener(e -> logArea.setText(""));
 
@@ -148,19 +148,10 @@ public class FtpServer extends JFrame {
         });
     }
 
-    private void chooseRootFolder() {
-        JFileChooser chooser = new JFileChooser(txtRootDir.getText().trim());
-        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            txtRootDir.setText(chooser.getSelectedFile().getAbsolutePath());
-        }
-    }
-
     private synchronized void toggleServer() {
         if (!isRunning) {
             String ip = ((String) cbIp.getSelectedItem()).trim();
             String portStr = txtPort.getText().trim();
-            String rootPath = txtRootDir.getText().trim();
 
             if (ip.isEmpty()) {
                 JOptionPane.showMessageDialog(this, "Vui lòng nhập IP!", "Lỗi", JOptionPane.ERROR_MESSAGE);
@@ -176,14 +167,8 @@ public class FtpServer extends JFrame {
                 return;
             }
 
-            File rootDir = new File(rootPath);
-            if (!rootDir.exists() || !rootDir.isDirectory()) {
-                JOptionPane.showMessageDialog(this, "Thư mục không tồn tại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-
             try {
-                startServer(ip, port, rootDir);
+                startServer(ip, port);
             } catch (IOException e) {
                 JOptionPane.showMessageDialog(this, "Lỗi mở cổng: " + e.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
             }
@@ -192,7 +177,7 @@ public class FtpServer extends JFrame {
         }
     }
 
-    public synchronized void startServer(String ip, int port, File rootDir) throws IOException {
+    public synchronized void startServer(String ip, int port) throws IOException {
         if (isRunning) return;
 
         serverSocket = new ServerSocket(port);
@@ -203,23 +188,21 @@ public class FtpServer extends JFrame {
         lblStatus.setForeground(new Color(40, 167, 69));
         cbIp.setEnabled(false);
         txtPort.setEnabled(false);
-        txtRootDir.setEnabled(false);
-        btnBrowse.setEnabled(false);
 
-        log("[KHỞI ĐỘNG]   ServerSocket đang lắng nghe tại cổng " + port + " | Thư mục: " + rootDir.getAbsolutePath());
+        log("[KHỞI ĐỘNG]   ServerSocket đang lắng nghe tại cổng " + port + " | Lưu trữ: 100% CSDL MySQL (ftp_db)");
 
         // Đa luồng lắng nghe client
         serverThread = new Thread(() -> {
             while (isRunning) {
                 try {
                     Socket clientSocket = serverSocket.accept();
-                    ClientHandler handler = new ClientHandler(clientSocket, rootDir, ip, this);
+                    ClientHandler handler = new ClientHandler(clientSocket, ip, this);
                     activeClients.add(handler);
                     updateClientCount();
                     new Thread(handler).start();
                 } catch (IOException e) {
                     if (!isRunning) break;
-                    log("[ERROR] Lỗi accept: " + e.getMessage());
+                    log("[LỖI ACCEPT]  " + e.getMessage());
                 }
             }
         }, "FTP-Server-Thread");
@@ -248,8 +231,6 @@ public class FtpServer extends JFrame {
         lblStatus.setForeground(new Color(220, 53, 69));
         cbIp.setEnabled(true);
         txtPort.setEnabled(true);
-        txtRootDir.setEnabled(true);
-        btnBrowse.setEnabled(true);
         updateClientCount();
 
         log("[DỪNG HẲN]    Server đã dừng hoạt động và đóng toàn bộ kết nối.");

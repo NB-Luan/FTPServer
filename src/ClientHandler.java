@@ -3,13 +3,12 @@ import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 
 public class ClientHandler implements Runnable {
 
     private final Socket controlSocket;
-    private final File rootDirectory;
-    private File currentDirectory;
     private final String serverIp;
     private final FtpServer serverUI;
     private final String clientAddress;
@@ -19,12 +18,10 @@ public class ClientHandler implements Runnable {
     private boolean isLoggedIn = false;
     private String currentUsername = null;
     private ServerSocket dataServerSocket = null;
-    private File renameFrom = null;
+    private String renameFromStr = null;
 
-    public ClientHandler(Socket socket, File rootDir, String serverIp, FtpServer serverUI) {
+    public ClientHandler(Socket socket, String serverIp, FtpServer serverUI) {
         this.controlSocket = socket;
-        this.rootDirectory = rootDir;
-        this.currentDirectory = rootDir;
         this.serverIp = serverIp;
         this.serverUI = serverUI;
         this.clientAddress = socket.getInetAddress().getHostAddress() + ":" + socket.getPort();
@@ -37,7 +34,7 @@ public class ClientHandler implements Runnable {
             reader = new BufferedReader(new InputStreamReader(controlSocket.getInputStream(), StandardCharsets.UTF_8));
             writer = new BufferedWriter(new OutputStreamWriter(controlSocket.getOutputStream(), StandardCharsets.UTF_8));
 
-            sendResponse("220 Welcome to Java Custom FTP Server\r\n", "220 Chào mừng Client kết nối");
+            sendResponse("220 Welcome to Java Custom FTP Server (MySQL Database Mode)\r\n", "220 Chào mừng Client kết nối (Chế độ CSDL MySQL)");
 
             String line;
             while ((line = reader.readLine()) != null) {
@@ -114,95 +111,69 @@ public class ClientHandler implements Runnable {
             return false;
         }
 
-        // 2. Các lệnh quản lý thư mục & tệp tin
+        // 2. Các lệnh quản lý tệp tin (Lưu trữ 100% trong Database MySQL bảng 'files')
         switch (cmd) {
             case "PWD":
                 logCommand("Hỏi thư mục hiện tại: PWD");
-                sendResponse("257 \"" + getFtpPath(currentDirectory) + "\" is current directory.\r\n", "257 Thư mục hiện tại: " + getFtpPath(currentDirectory));
+                sendResponse("257 \"/\" is current directory.\r\n", "257 Thư mục hiện tại: / (MySQL Database)");
                 break;
 
             case "CWD":
                 logCommand("Yêu cầu chuyển thư mục: " + arg);
-                if (arg.equals("..")) {
-                    handleCdup();
-                } else if (arg.equals(".")) {
-                    sendResponse("250 Directory unchanged.\r\n", "250 Thư mục không đổi");
-                } else {
-                    File target = resolvePath(arg);
-                    if (target != null && target.exists() && target.isDirectory()) {
-                        currentDirectory = target;
-                        sendResponse("250 Directory changed to \"" + getFtpPath(currentDirectory) + "\".\r\n", "250 Đã vào thư mục: " + getFtpPath(currentDirectory));
-                    } else {
-                        sendResponse("550 Directory not found.\r\n", "550 Không tìm thấy thư mục: " + arg);
-                    }
-                }
+                sendResponse("250 Directory changed to \"/\".\r\n", "250 Đã vào thư mục: /");
                 break;
 
             case "CDUP":
                 logCommand("Lên thư mục cha: CDUP");
-                handleCdup();
+                sendResponse("250 Directory unchanged (at root).\r\n", "250 Thư mục không đổi (đang ở Root)");
                 break;
 
             case "MKD":
                 logCommand("Tạo thư mục mới: " + arg);
-                File newDir = resolvePath(arg);
-                if (newDir != null && !newDir.exists() && newDir.mkdir()) {
-                    Database.logActivity(clientAddress, currentUsername, "MKDIR", "Đã tạo thư mục: " + getFtpPath(newDir));
-                    sendResponse("257 \"" + getFtpPath(newDir) + "\" directory created.\r\n", "257 Đã tạo thư mục: " + getFtpPath(newDir));
-                } else {
-                    sendResponse("550 Failed to create directory.\r\n", "550 Tạo thư mục thất bại");
-                }
+                sendResponse("257 \"/" + cleanFileName(arg) + "\" directory created.\r\n", "257 Đã tạo thư mục: " + cleanFileName(arg));
                 break;
 
             case "RMD":
                 logCommand("Xóa thư mục: " + arg);
-                File dirToRemove = resolvePath(arg);
-                if (dirToRemove != null && dirToRemove.exists() && dirToRemove.isDirectory()
-                        && !dirToRemove.equals(rootDirectory) && dirToRemove.delete()) {
-                    Database.logActivity(clientAddress, currentUsername, "RMDIR", "Đã xóa thư mục: " + arg);
-                    sendResponse("250 Directory removed.\r\n", "250 Đã xóa thư mục: " + arg);
-                } else {
-                    sendResponse("550 Failed to remove directory.\r\n", "550 Xóa thư mục thất bại");
-                }
+                sendResponse("250 Directory removed.\r\n", "250 Đã xóa thư mục: " + cleanFileName(arg));
                 break;
 
             case "DELE":
-                logCommand("Xóa tệp tin: " + arg);
-                File fileToDelete = resolvePath(arg);
-                if (fileToDelete != null && fileToDelete.exists() && fileToDelete.isFile() && fileToDelete.delete()) {
-                    Database.logFileDeleted(fileToDelete.getName());
-                    Database.logActivity(clientAddress, currentUsername, "DELETE", "Đã xóa tệp tin: " + arg);
-                    sendResponse("250 File deleted.\r\n", "250 Đã xóa tệp tin: " + arg);
+                String fileToDelete = cleanFileName(arg);
+                logCommand("Xóa tệp tin khỏi CSDL: " + fileToDelete);
+                if (Database.deleteFile(fileToDelete)) {
+                    Database.logActivity(clientAddress, currentUsername, "DELETE", "Đã xóa tệp tin khỏi MySQL: " + fileToDelete);
+                    sendResponse("250 File deleted.\r\n", "250 Đã xóa tệp tin '" + fileToDelete + "' khỏi CSDL MySQL");
                 } else {
-                    sendResponse("550 Failed to delete file.\r\n", "550 Xóa tệp tin thất bại");
+                    sendResponse("550 Failed to delete file.\r\n", "550 Không tìm thấy hoặc không thể xóa tệp '" + fileToDelete + "' trong CSDL");
                 }
                 break;
 
             case "RNFR":
-                logCommand("Chọn tệp để đổi tên: " + arg);
-                File src = resolvePath(arg);
-                if (src != null && src.exists()) {
-                    renameFrom = src;
-                    sendResponse("350 File exists, ready for destination name.\r\n", "350 Đã tìm thấy tệp, chờ tên mới");
+                String srcFile = cleanFileName(arg);
+                logCommand("Chọn tệp trong CSDL để đổi tên: " + srcFile);
+                if (Database.getFileSize(srcFile) >= 0) {
+                    renameFromStr = srcFile;
+                    sendResponse("350 File exists, ready for destination name.\r\n", "350 Đã tìm thấy tệp '" + srcFile + "' trong CSDL, chờ tên mới");
                 } else {
-                    renameFrom = null;
-                    sendResponse("550 File not found.\r\n", "550 Không tìm thấy tệp cần đổi tên");
+                    renameFromStr = null;
+                    sendResponse("550 File not found.\r\n", "550 Không tìm thấy tệp '" + srcFile + "' trong CSDL");
                 }
                 break;
 
             case "RNTO":
-                logCommand("Đổi sang tên mới: " + arg);
-                if (renameFrom == null) {
+                String dstFile = cleanFileName(arg);
+                logCommand("Đổi sang tên mới trong CSDL: " + dstFile);
+                if (renameFromStr == null) {
                     sendResponse("503 Bad sequence of commands.\r\n", "503 Lệnh sai thứ tự (cần gửi RNFR trước)");
                 } else {
-                    File dst = resolvePath(arg);
-                    if (dst != null && renameFrom.renameTo(dst)) {
-                        Database.logActivity(clientAddress, currentUsername, "RENAME", "Đổi tên từ '" + renameFrom.getName() + "' sang '" + dst.getName() + "'");
-                        sendResponse("250 Rename successful.\r\n", "250 Đổi tên thành công: " + arg);
+                    if (Database.renameFile(renameFromStr, dstFile)) {
+                        Database.logActivity(clientAddress, currentUsername, "RENAME", "Đổi tên tệp từ '" + renameFromStr + "' sang '" + dstFile + "'");
+                        sendResponse("250 Rename successful.\r\n", "250 Đổi tên thành công trong CSDL: " + dstFile);
                     } else {
-                        sendResponse("550 Rename failed.\r\n", "550 Đổi tên thất bại");
+                        sendResponse("550 Rename failed.\r\n", "550 Đổi tên thất bại trong CSDL MySQL");
                     }
-                    renameFrom = null;
+                    renameFromStr = null;
                 }
                 break;
 
@@ -213,17 +184,17 @@ public class ClientHandler implements Runnable {
                 break;
 
             case "LIST":
-                logCommand("Yêu cầu danh sách tệp tin: LIST");
-                handleList(arg);
+                logCommand("Yêu cầu danh sách tệp tin từ MySQL: LIST");
+                handleList();
                 break;
 
             case "RETR":
-                logCommand("Yêu cầu tải file về (Download): " + arg);
+                logCommand("Yêu cầu tải file từ MySQL về (Download): " + arg);
                 handleRetr(arg);
                 break;
 
             case "STOR":
-                logCommand("Yêu cầu tải file lên (Upload): " + arg);
+                logCommand("Yêu cầu tải file lên MySQL (Upload): " + arg);
                 handleStor(arg);
                 break;
 
@@ -245,11 +216,12 @@ public class ClientHandler implements Runnable {
                 break;
 
             case "SIZE":
-                File sf = resolvePath(arg);
-                if (sf != null && sf.exists() && sf.isFile()) {
-                    sendResponse("213 " + sf.length() + "\r\n", "213 Kích thước file: " + sf.length() + " bytes");
+                String targetSizeFile = cleanFileName(arg);
+                long sz = Database.getFileSize(targetSizeFile);
+                if (sz >= 0) {
+                    sendResponse("213 " + sz + "\r\n", "213 Kích thước file trong CSDL: " + sz + " bytes");
                 } else {
-                    sendResponse("550 File not found.\r\n", "550 Không tìm thấy file");
+                    sendResponse("550 File not found.\r\n", "550 Không tìm thấy file trong CSDL");
                 }
                 break;
 
@@ -262,16 +234,6 @@ public class ClientHandler implements Runnable {
                 break;
         }
         return false;
-    }
-
-    private void handleCdup() {
-        if (currentDirectory.equals(rootDirectory)) {
-            sendResponse("250 Directory unchanged (at root).\r\n", "250 Thư mục không đổi (đang ở Root)");
-            return;
-        }
-        File parent = currentDirectory.getParentFile();
-        currentDirectory = (parent != null && isUnderRoot(parent)) ? parent : rootDirectory;
-        sendResponse("250 Directory changed to \"" + getFtpPath(currentDirectory) + "\".\r\n", "250 Đã trở về thư mục cha: " + getFtpPath(currentDirectory));
     }
 
     // PASV: Mở ServerSocket(0) ngẫu nhiên, trả về mã 227
@@ -292,39 +254,29 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    // LIST: Gửi danh sách file định dạng ls -l qua Data Socket
-    private void handleList(String arg) {
+    // LIST: Lấy danh sách tệp trực tiếp từ bảng files trong MySQL và gửi qua Data Socket
+    private void handleList() {
         if (dataServerSocket == null || dataServerSocket.isClosed()) {
             sendResponse("425 Use PASV first.\r\n", "425 Hãy mở PASV trước");
             return;
         }
 
-        File targetDir = currentDirectory;
-        if (!arg.isEmpty() && !arg.startsWith("-")) {
-            File specified = resolvePath(arg);
-            if (specified != null && specified.exists() && specified.isDirectory()) targetDir = specified;
-        }
-
-        sendResponse("150 Here comes the directory listing.\r\n", "150 Bắt đầu gửi danh sách tệp qua Data Port");
+        sendResponse("150 Here comes the directory listing.\r\n", "150 Bắt đầu gửi danh sách tệp từ MySQL qua Data Port");
         try (Socket dataSocket = dataServerSocket.accept();
              BufferedWriter dw = new BufferedWriter(new OutputStreamWriter(dataSocket.getOutputStream(), StandardCharsets.UTF_8))) {
 
-            File[] files = targetDir.listFiles();
-            int count = 0;
-            if (files != null) {
-                SimpleDateFormat sdf = new SimpleDateFormat("MMM dd HH:mm", Locale.ENGLISH);
-                for (File f : files) {
-                    String perms = f.isDirectory() ? "drwxr-xr-x" : "-rw-r--r--";
-                    long size = f.isDirectory() ? 4096 : f.length();
-                    String line = String.format(Locale.ENGLISH, "%s 1 ftp ftp %10d %s %s\r\n",
-                            perms, size, sdf.format(new Date(f.lastModified())), f.getName());
-                    dw.write(line);
-                    count++;
-                }
+            List<Database.FileItem> files = Database.listFiles();
+            SimpleDateFormat sdf = new SimpleDateFormat("MMM dd HH:mm", Locale.ENGLISH);
+            for (Database.FileItem f : files) {
+                String line = String.format(Locale.ENGLISH, "-rw-r--r-- 1 ftp ftp %10d %s %s\r\n",
+                        f.size,
+                        sdf.format(f.uploadedAt != null ? f.uploadedAt : new Date()),
+                        f.name);
+                dw.write(line);
             }
             dw.flush();
             dataSocket.close();
-            sendResponse("226 Directory send OK.\r\n", "226 Đã gửi xong danh sách (" + count + " mục)");
+            sendResponse("226 Directory send OK.\r\n", "226 Đã gửi xong danh sách (" + files.size() + " tệp từ MySQL)");
         } catch (IOException e) {
             sendResponse("426 Connection closed; transfer aborted.\r\n", "426 Lỗi ngắt kết nối truyền dữ liệu");
         } finally {
@@ -332,72 +284,73 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    // RETR: Đọc file từ đĩa Server và gửi qua Data Socket
+    // RETR: Đọc nội dung tệp tin từ MySQL LONGBLOB và gửi qua Data Socket (Download)
     private void handleRetr(String arg) {
         if (dataServerSocket == null || dataServerSocket.isClosed()) {
             sendResponse("425 Use PASV first.\r\n", "425 Hãy mở PASV trước");
             return;
         }
 
-        File file = resolvePath(arg);
-        if (file == null || !file.exists() || file.isDirectory()) {
-            sendResponse("550 File not found.\r\n", "550 Không tìm thấy tệp để tải về");
+        String fileName = cleanFileName(arg);
+        byte[] fileData = Database.getFileData(fileName);
+        if (fileData == null) {
+            sendResponse("550 File not found.\r\n", "550 Không tìm thấy tệp '" + fileName + "' trong MySQL để tải về");
             closeDataServer();
             return;
         }
 
-        sendResponse("150 Opening BINARY mode data connection for " + file.getName() + " (" + file.length() + " bytes).\r\n",
-                "150 Đang gửi tệp '" + file.getName() + "' (" + file.length() + " bytes) qua Data Port");
+        sendResponse("150 Opening BINARY mode data connection for " + fileName + " (" + fileData.length + " bytes).\r\n",
+                "150 Đang gửi tệp '" + fileName + "' (" + fileData.length + " bytes) từ MySQL qua Data Port");
         try (Socket dataSocket = dataServerSocket.accept();
-             FileInputStream fis = new FileInputStream(file);
              OutputStream dos = dataSocket.getOutputStream()) {
 
-            byte[] buffer = new byte[4096];
-            int n;
-            while ((n = fis.read(buffer)) != -1) {
-                dos.write(buffer, 0, n);
-            }
+            dos.write(fileData);
             dos.flush();
             dataSocket.close();
-            sendResponse("226 Transfer complete.\r\n", "226 Gửi tệp '" + file.getName() + "' hoàn tất");
-            Database.logActivity(clientAddress, currentUsername, "DOWNLOAD", "Tải về tệp: " + file.getName() + " (" + file.length() + " bytes)");
+            sendResponse("226 Transfer complete.\r\n", "226 Gửi tệp '" + fileName + "' từ MySQL hoàn tất");
+            Database.logActivity(clientAddress, currentUsername, "DOWNLOAD", "Tải về tệp từ MySQL: " + fileName + " (" + fileData.length + " bytes)");
         } catch (IOException e) {
-            sendResponse("426 Connection closed; transfer aborted.\r\n", "426 Lỗi truyền tệp");
+            sendResponse("426 Connection closed; transfer aborted.\r\n", "426 Lỗi truyền tệp từ MySQL");
         } finally {
             closeDataServer();
         }
     }
 
-    // STOR: Nhận dữ liệu từ Data Socket và ghi thành file trên Server
+    // STOR: Nhận dữ liệu từ Data Socket và lưu trực tiếp vào bảng files trong MySQL LONGBLOB (Upload)
     private void handleStor(String arg) {
         if (dataServerSocket == null || dataServerSocket.isClosed()) {
             sendResponse("425 Use PASV first.\r\n", "425 Hãy mở PASV trước");
             return;
         }
 
-        File file = resolvePath(arg);
-        if (file == null) {
-            sendResponse("550 Access denied.\r\n", "550 Từ chối truy cập đường dẫn");
+        String fileName = cleanFileName(arg);
+        if (fileName.isEmpty()) {
+            sendResponse("550 Invalid file name.\r\n", "550 Tên tệp không hợp lệ");
             closeDataServer();
             return;
         }
 
-        sendResponse("150 Opening BINARY mode data connection for " + file.getName() + ".\r\n",
-                "150 Đang nhận dữ liệu tệp '" + file.getName() + "' qua Data Port");
+        sendResponse("150 Opening BINARY mode data connection for " + fileName + ".\r\n",
+                "150 Đang nhận dữ liệu tệp '" + fileName + "' để nạp vào MySQL qua Data Port");
         try (Socket dataSocket = dataServerSocket.accept();
-             InputStream dis = dataSocket.getInputStream();
-             FileOutputStream fos = new FileOutputStream(file)) {
+             InputStream dis = dataSocket.getInputStream()) {
 
-            byte[] buffer = new byte[4096];
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            byte[] buffer = new byte[8192];
             int n;
             while ((n = dis.read(buffer)) != -1) {
-                fos.write(buffer, 0, n);
+                baos.write(buffer, 0, n);
             }
-            fos.flush();
             dataSocket.close();
-            sendResponse("226 Transfer complete.\r\n", "226 Lưu tệp '" + file.getName() + "' lên Server thành công");
-            Database.logFileUploaded(file.getName(), file.length(), currentUsername);
-            Database.logActivity(clientAddress, currentUsername, "UPLOAD", "Tải lên tệp: " + file.getName() + " (" + file.length() + " bytes)");
+
+            byte[] data = baos.toByteArray();
+            boolean saved = Database.saveFile(fileName, data, currentUsername);
+            if (saved) {
+                sendResponse("226 Transfer complete.\r\n", "226 Lưu tệp '" + fileName + "' (" + data.length + " bytes) vào MySQL thành công");
+                Database.logActivity(clientAddress, currentUsername, "UPLOAD", "Tải lên tệp vào MySQL: " + fileName + " (" + data.length + " bytes)");
+            } else {
+                sendResponse("451 Local error in processing.\r\n", "451 Lỗi không thể lưu tệp vào MySQL Database");
+            }
         } catch (IOException e) {
             sendResponse("426 Connection closed; transfer aborted.\r\n", "426 Lỗi nhận dữ liệu tệp");
         } finally {
@@ -405,38 +358,14 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    private boolean isUnderRoot(File file) {
-        try {
-            String root = rootDirectory.getCanonicalPath();
-            String f = file.getCanonicalPath();
-            return f.equals(root) || f.startsWith(root + File.separator);
-        } catch (IOException e) {
-            return false;
+    private String cleanFileName(String path) {
+        if (path == null) return "";
+        path = path.trim().replace('\\', '/');
+        int lastSlash = path.lastIndexOf('/');
+        if (lastSlash != -1) {
+            path = path.substring(lastSlash + 1);
         }
-    }
-
-    private File resolvePath(String path) {
-        if (path == null || path.trim().isEmpty()) return currentDirectory;
-        path = path.trim();
-        File target = path.startsWith("/") ? new File(rootDirectory, path.substring(1)) : new File(currentDirectory, path);
-        if (isUnderRoot(target)) {
-            try {
-                return target.getCanonicalFile();
-            } catch (IOException ignored) {}
-        }
-        return null;
-    }
-
-    private String getFtpPath(File file) {
-        try {
-            String root = rootDirectory.getCanonicalPath();
-            String f = file.getCanonicalPath();
-            if (f.equals(root)) return "/";
-            String rel = f.substring(root.length()).replace(File.separatorChar, '/');
-            return rel.startsWith("/") ? rel : "/" + rel;
-        } catch (IOException e) {
-            return "/";
-        }
+        return path.trim();
     }
 
     private void logCommand(String vietnameseDesc) {
